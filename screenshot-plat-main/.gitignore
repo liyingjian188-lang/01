@@ -1,0 +1,21 @@
+# macOS / IDE
+.DS_Store
+.idea/
+*.iml
+
+# build outputs
+bin/
+screenshot/client
+screensot-server/server
+screensot-server/config.json
+
+# go test / coverage
+*.test
+*.out
+.cache-*/
+.gocache*/
+
+# runtime logs
+*.log
+logs/
+bin/logs/

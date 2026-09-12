@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#18342e">
+  <title>实时识别结果</title>
+  <style>
+    :root { --ink:#17221f; --muted:#68746f; --paper:#f7f3e8; --card:#fffdf7; --green:#18342e; --line:#d9d3c4; --red:#a63d2f; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--ink); background:radial-gradient(circle at 90% 0,#d6e4d6 0,transparent 35%),linear-gradient(160deg,#f7f3e8,#ebe5d6); font-family:Georgia,"Microsoft YaHei",serif; }
+    main { width:min(760px,100%); margin:auto; padding:24px 16px 48px; }
+    header { padding:18px 4px 24px; }
+    h1 { margin:0 0 8px; font-size:clamp(28px,8vw,48px); font-weight:500; letter-spacing:-.04em; }
+    .connection { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:14px; }
+    .dot { width:9px; height:9px; border-radius:50%; background:#b58b36; box-shadow:0 0 0 4px #b58b3620; }
+    .dot.online { background:#2b7a57; box-shadow:0 0 0 4px #2b7a5720; }
+    .capture { width:100%; margin-top:18px; padding:15px 18px; border:0; border-radius:14px; color:#fffdf7; background:var(--green); box-shadow:0 10px 24px #18342e30; font:600 16px/1 "Microsoft YaHei",sans-serif; cursor:pointer; }
+    .capture:active { transform:translateY(1px); }
+    .capture:disabled { cursor:wait; opacity:.58; transform:none; }
+    article { overflow:hidden; border:1px solid var(--line); border-radius:20px; background:var(--card); box-shadow:0 18px 60px #3f4b4220; }
+    .meta { display:flex; justify-content:space-between; gap:12px; padding:14px 18px; color:var(--muted); background:#f0ecdf; font-size:13px; }
+    section { padding:20px 18px; border-top:1px solid var(--line); }
+    section:first-of-type { border-top:0; }
+    h2 { margin:0 0 12px; color:var(--green); font-size:13px; letter-spacing:.16em; text-transform:uppercase; }
+    pre { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font:15px/1.75 "Microsoft YaHei",sans-serif; }
+    .answer pre { font-size:16px; }
+    .error { color:var(--red); }
+    .empty { padding:48px 20px; color:var(--muted); text-align:center; line-height:1.8; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>识别结果</h1>
+      <div class="connection"><span id="dot" class="dot"></span><span id="connection">正在连接电脑...</span></div>
+      <button id="capture" class="capture" type="button">截图并识别</button>
+    </header>
+    <article id="card">
+      <div id="empty" class="empty">点击上方按钮，或在电脑上按下 F8，答案会自动出现在这里。</div>
+      <div id="content" hidden>
+        <div class="meta"><span id="status">等待中</span><span id="time"></span></div>
+        <section id="question-section"><h2>题目</h2><pre id="question"></pre></section>
+        <section class="answer" id="answer-section"><h2>答案与解析</h2><pre id="answer"></pre></section>
+        <section id="error-section" hidden><h2>错误</h2><pre id="error" class="error"></pre></section>
+      </div>
+    </article>
+  </main>
+  <script>
+    const token = new URLSearchParams(location.search).get("token") || "";
+    const captureButton = document.getElementById("capture");
+    const source = new EventSource("/events?token=" + encodeURIComponent(token));
+    const labels = { queued:"已加入队列", analyzing:"正在识别", complete:"识别完成", error:"识别失败", busy:"任务繁忙" };
+    const setText = (id, value) => document.getElementById(id).textContent = value || "";
+    const setCaptureState = (disabled, text) => {
+      captureButton.disabled = disabled;
+      captureButton.textContent = text;
+    };
+    captureButton.addEventListener("click", async () => {
+      setCaptureState(true, "正在通知电脑...");
+      try {
+        const response = await fetch("/mobile/capture?token=" + encodeURIComponent(token), { method:"POST" });
+        if (!response.ok) {
+          const message = (await response.text()).trim();
+          throw new Error(message || "请求失败（HTTP " + response.status + "）");
+        }
+        setCaptureState(true, "电脑正在截图...");
+      } catch (error) {
+        setText("connection", "触发失败：" + error.message);
+        setCaptureState(false, "截图并识别");
+      }
+    });
+    source.onopen = () => {
+      document.getElementById("dot").classList.add("online");
+      setText("connection", "已连接，等待电脑发送结果");
+    };
+    source.onerror = () => {
+      document.getElementById("dot").classList.remove("online");
+      setText("connection", "连接中断，正在自动重连...");
+    };
+    source.onmessage = event => {
+      const data = JSON.parse(event.data);
+      document.getElementById("empty").hidden = true;
+      document.getElementById("content").hidden = false;
+      setText("status", (labels[data.status] || data.status) + (data.model ? " · " + data.model : ""));
+      setText("time", data.created_at);
+      setText("question", data.question);
+      setText("answer", data.answer);
+      setText("error", data.error);
+      document.getElementById("question-section").hidden = !data.question;
+      document.getElementById("answer-section").hidden = !data.answer;
+      document.getElementById("error-section").hidden = !data.error;
+      if (data.status === "queued" || data.status === "analyzing") {
+        setCaptureState(true, data.status === "queued" ? "已提交，等待识别..." : "正在识别...");
+      } else {
+        setCaptureState(false, "再次截图并识别");
+      }
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "models": [
+    "Qwen/Qwen3-VL-32B-Instruct"
+  ],
+  "siliconflow_base_url": "https://api.siliconflow.cn",
+  "siliconflow_api_key": "${PUT_YOUR_KEY_HERE}",
+  "vision_timeout_seconds": 120,
+  "vision_max_tokens": 4096,
+  "vision_max_retries": 2,
+  "vision_retry_delay_ms": 2000,
+  "mobile_access_token": "change-this-token",
+  "template_path": "web/result.html"
+}
